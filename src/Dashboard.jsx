@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, LayoutGrid, List, Minimize2, User, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, User } from 'lucide-react';
 
-// URL LANGSUNG KE KOYEB
 const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app"; 
 
 export default function Dashboard() {
@@ -13,8 +12,6 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [search, setSearch] = useState("");
   const [viewSize, setViewSize] = useState("medium");
-  const [sortBy, setSortBy] = useState("name");
-  const [sortOrder, setSortOrder] = useState("asc");
 
   const loadAccounts = async () => {
     try {
@@ -44,12 +41,6 @@ export default function Dashboard() {
   useEffect(() => { loadAccounts(); }, []);
   useEffect(() => { if (selectedAcc) loadFiles(selectedAcc.email, currentFolder); }, [selectedAcc, currentFolder]);
 
-  const sortedFiles = [...files].sort((a, b) => {
-    if (a.isFolder !== b.isFolder) return sortOrder === "asc" ? (a.isFolder ? -1 : 1) : (a.isFolder ? 1 : -1);
-    let comp = sortBy === "name" ? a.name.localeCompare(b.name) : a.size - b.size;
-    return sortOrder === "asc" ? comp : -comp;
-  });
-
   const handleItemClick = async (file) => {
     if (file.isFolder) {
       setHistory([...history, currentFolder]);
@@ -70,7 +61,9 @@ export default function Dashboard() {
     setCurrentFolder(last);
   };
 
-  const gridStyles = { small: "grid-cols-4 md:grid-cols-8 gap-2", medium: "grid-cols-2 md:grid-cols-5 gap-6", list: "grid-cols-1 gap-2" };
+  const gridStyles = { 
+    medium: "grid-cols-2 md:grid-cols-5 gap-6" 
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
@@ -111,7 +104,7 @@ export default function Dashboard() {
             <div className="text-center py-40 animate-pulse text-blue-500 font-black italic tracking-widest">LOADING DRIVE...</div>
           ) : (
             <div className={`grid ${gridStyles[viewSize]}`}>
-              {sortedFiles.filter(f => f.name.toLowerCase().includes(search.toLowerCase())).map(file => (
+              {files.filter(f => f.name.toLowerCase().includes(search.toLowerCase())).map(file => (
                 <div key={file.id} onClick={() => handleItemClick(file)}
                   className="bg-white border border-slate-100 rounded-3xl cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all p-5 flex flex-col items-center">
                   <div className={`rounded-2xl p-4 w-14 h-14 mb-4 flex items-center justify-center ${file.isFolder ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-600'}`}>
