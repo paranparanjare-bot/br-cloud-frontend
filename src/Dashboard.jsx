@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, LayoutGrid, List, Minimize2, User, ArrowUp, ArrowDown } from 'lucide-react';
 
-// URL LANGSUNG KE KOYEB - INI HARUS HTTPS
+// URL LANGSUNG KE KOYEB
 const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app"; 
 
 export default function Dashboard() {
@@ -23,7 +23,7 @@ export default function Dashboard() {
       setAccounts(data);
       if (data.length > 0 && !selectedAcc) setSelectedAcc(data[0]);
     } catch (e) { 
-      console.error("Gagal koneksi ke server Koyeb:", e);
+      console.error("Gagal koneksi ke Koyeb:", e);
     }
   };
 
@@ -35,7 +35,7 @@ export default function Dashboard() {
       const data = await res.json();
       setFiles(Array.isArray(data) ? data : []);
     } catch (e) { 
-      console.error("Gagal muat file:", e); 
+      console.error("Gagal load file:", e); 
     } finally { 
       setIsLoading(false); 
     }
@@ -63,6 +63,13 @@ export default function Dashboard() {
     }
   };
 
+  const goBack = () => {
+    const prev = [...history];
+    const last = prev.pop() || 'root';
+    setHistory(prev);
+    setCurrentFolder(last);
+  };
+
   const gridStyles = { small: "grid-cols-4 md:grid-cols-8 gap-2", medium: "grid-cols-2 md:grid-cols-5 gap-6", list: "grid-cols-1 gap-2" };
 
   return (
@@ -81,7 +88,7 @@ export default function Dashboard() {
                 fetch(`${API_BASE_URL}/api/auth/google`)
                 .then(r => r.json())
                 .then(d => { if(d.url) window.location.href=d.url; })
-                .catch(() => alert("Koneksi ke server Koyeb gagal. Pastikan server Healthy."));
+                .catch(() => alert("Koneksi ke server Koyeb gagal."));
             }}
             className="w-full p-3 rounded-xl text-xs font-bold border-2 border-dashed border-slate-200 text-slate-400 hover:text-blue-500 transition-all">
             + Tambah Akun
@@ -91,9 +98,7 @@ export default function Dashboard() {
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-20 bg-white border-b flex items-center px-10 gap-4">
-          {currentFolder !== 'root' && (
-            <button onClick={() => {const h=[...history]; const l=h.pop()||'root'; setHistory(h); setCurrentFolder(l);}} className="p-2 border rounded-full hover:bg-slate-100"><ChevronLeft /></button>
-          )}
+          {currentFolder !== 'root' && <button onClick={goBack} className="p-2 border rounded-full hover:bg-slate-100"><ChevronLeft /></button>}
           <div className="relative flex-1">
             <Search className="absolute left-4 top-3 text-slate-400 w-4 h-4" />
             <input className="w-full bg-slate-100 pl-12 pr-4 py-3 rounded-2xl outline-none" placeholder="Cari file..." onChange={e => setSearch(e.target.value)} />
@@ -103,7 +108,7 @@ export default function Dashboard() {
 
         <div className="p-10 overflow-y-auto">
           {isLoading ? (
-            <div className="text-center py-40 animate-pulse text-blue-500 font-black italic tracking-widest">SINKRONISASI DRIVE...</div>
+            <div className="text-center py-40 animate-pulse text-blue-500 font-black italic tracking-widest">LOADING DRIVE...</div>
           ) : (
             <div className={`grid ${gridStyles[viewSize]}`}>
               {sortedFiles.filter(f => f.name.toLowerCase().includes(search.toLowerCase())).map(file => (
