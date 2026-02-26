@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, User, Upload, List, Grid, LayoutGrid, ArrowUp, ArrowDown, Menu, X } from 'lucide-react';
+import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, User, UploadCloud, List, Grid, LayoutGrid, ArrowUp, ArrowDown, Menu, X } from 'lucide-react';
 
 const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app"; 
 
@@ -13,11 +13,10 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [search, setSearch] = useState("");
   
-  // State Baru untuk Tampilan, Sortir, dan Sidebar Mobile
   const [viewMode, setViewMode] = useState('medium'); 
   const [sortBy, setSortBy] = useState('name'); 
   const [sortOrder, setSortOrder] = useState('asc'); 
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // State untuk mengatur buka/tutup sidebar di HP
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
 
   const fileInputRef = useRef(null);
 
@@ -33,7 +32,20 @@ export default function Dashboard() {
       const res = await fetch(`${API_BASE_URL}/api/accounts`);
       const data = await res.json();
       setAccounts(data);
-      if (data.length > 0 && !selectedAcc) setSelectedAcc(data[0]);
+      
+      // LOGIKA BARU: Cek LocalStorage untuk sesi permanen
+      if (data.length > 0) {
+        const savedAccEmail = localStorage.getItem('lastActiveAccount');
+        const foundAcc = data.find(acc => acc.email === savedAccEmail);
+        
+        if (foundAcc) {
+          setSelectedAcc(foundAcc);
+        } else if (!selectedAcc) {
+          // Jika tidak ada di LocalStorage, pilih akun pertama
+          setSelectedAcc(data[0]);
+          localStorage.setItem('lastActiveAccount', data[0].email);
+        }
+      }
     } catch (e) { 
       console.error("Gagal koneksi ke Koyeb:", e);
     }
@@ -54,7 +66,14 @@ export default function Dashboard() {
   };
 
   useEffect(() => { loadAccounts(); }, []);
-  useEffect(() => { if (selectedAcc) loadFiles(selectedAcc.email, currentFolder); }, [selectedAcc, currentFolder]);
+  
+  useEffect(() => { 
+    if (selectedAcc) {
+      loadFiles(selectedAcc.email, currentFolder); 
+      // Simpan akun yang sedang aktif ke LocalStorage agar permanen
+      localStorage.setItem('lastActiveAccount', selectedAcc.email);
+    }
+  }, [selectedAcc, currentFolder]);
 
   const handleItemClick = async (file) => {
     if (file.isFolder) {
@@ -126,7 +145,6 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans relative">
       
-      {/* Latar Belakang Gelap (Backdrop) saat sidebar terbuka di Mobile */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 bg-slate-900/50 z-40 md:hidden transition-opacity"
@@ -134,13 +152,11 @@ export default function Dashboard() {
         />
       )}
 
-      {/* Sidebar - Dibuat Absolute/Fixed di Mobile, Relative di Desktop */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r flex flex-col shadow-xl md:shadow-sm transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex items-center justify-between p-6 mb-4">
           <div className="flex items-center text-blue-600 font-bold text-xl italic">
             <Cloud className="mr-2"/> BR Drive
           </div>
-          {/* Tombol Tutup Sidebar (Hanya muncul di Mobile) */}
           <button className="md:hidden text-slate-400 hover:text-slate-600" onClick={() => setIsSidebarOpen(false)}>
             <X className="w-6 h-6" />
           </button>
@@ -153,7 +169,7 @@ export default function Dashboard() {
                 setSelectedAcc(acc); 
                 setCurrentFolder('root'); 
                 setHistory([]);
-                setIsSidebarOpen(false); // Tutup sidebar otomatis di HP setelah pilih akun
+                setIsSidebarOpen(false); 
               }}
               className={`w-full flex items-center p-3 rounded-xl text-sm font-bold transition-all ${selectedAcc?.email === acc.email ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-100 text-slate-500'}`}>
               <User className="w-4 h-4 mr-3" /> {acc.name.split(' ')[0]}
@@ -173,11 +189,9 @@ export default function Dashboard() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden w-full">
-        {/* Header - Disesuaikan agar scrollable di mobile jika penuh */}
         <header className="bg-white border-b flex flex-col md:flex-row items-start md:items-center px-4 py-3 md:h-20 gap-3">
           
           <div className="flex items-center w-full md:w-auto gap-2">
-            {/* Tombol Hamburger (Hanya muncul di Mobile) */}
             <button 
               className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg" 
               onClick={() => setIsSidebarOpen(true)}
@@ -197,9 +211,8 @@ export default function Dashboard() {
             </div>
           </div>
           
-          <div className="hidden md:block flex-1"></div> {/* Spacer untuk desktop */}
+          <div className="hidden md:block flex-1"></div>
 
-          {/* Area Kontrol (Sortir, View, Tombol) - Scroll horizontal di HP */}
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar">
             
             <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
@@ -222,10 +235,9 @@ export default function Dashboard() {
               <RefreshCw className="w-4 h-4 md:w-5 md:h-5"/>
             </button>
             
-            <button onClick={() => fileInputRef.current.click()} disabled={isUploading || !selectedAcc} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-medium text-xs md:text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 shrink-0 whitespace-nowrap">
-              {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              <span className="hidden sm:inline">{isUploading ? 'Mengunggah...' : 'Upload'}</span>
-              <span className="sm:hidden">{isUploading ? '...' : 'Upload'}</span>
+            {/* Tombol Upload (Hanya Ikon) */}
+            <button onClick={() => fileInputRef.current.click()} disabled={isUploading || !selectedAcc} className="flex items-center justify-center bg-blue-600 text-white w-10 h-10 md:w-11 md:h-11 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 shrink-0 shadow-sm">
+              {isUploading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <UploadCloud className="w-5 h-5" />}
             </button>
             <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" />
           </div>
@@ -269,7 +281,6 @@ export default function Dashboard() {
         </div>
       </main>
 
-      {/* CSS Tambahan untuk menyembunyikan scrollbar di menu atas versi mobile */}
       <style>{`
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
