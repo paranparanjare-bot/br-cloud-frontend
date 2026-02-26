@@ -14,7 +14,6 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [search, setSearch] = useState("");
   
-  // State untuk Fitur Baru
   const [isGlobalSearch, setIsGlobalSearch] = useState(false);
   const [globalResults, setGlobalResults] = useState([]);
   const [transferModalFile, setTransferModalFile] = useState(null);
@@ -63,7 +62,7 @@ export default function Dashboard() {
     if (!email) return;
     setIsLoading(true);
     setActiveMenuId(null); 
-    setIsGlobalSearch(false); // Matikan global search jika pindah folder biasa
+    setIsGlobalSearch(false); 
     try {
       const res = await fetch(`${API_BASE_URL}/api/files/list?email=${email}&folderId=${folderId}`);
       const data = await res.json();
@@ -81,7 +80,6 @@ export default function Dashboard() {
     }
   }, [selectedAcc, currentFolder]);
 
-  // --- FUNGSI GLOBAL SEARCH ---
   const handleGlobalSearch = async () => {
     if (!search.trim()) return;
     setIsGlobalSearch(true);
@@ -98,7 +96,7 @@ export default function Dashboard() {
     }
   };
 
-  // --- FUNGSI TRANSFER ANTAR AKUN ---
+  // --- PERBAIKAN: TANGKAP ERROR MESSAGE & KIRIM MIMETYPE ---
   const executeTransfer = async (targetEmail) => {
     if (!transferModalFile || !selectedAcc) return;
     setIsTransferring(true);
@@ -111,17 +109,21 @@ export default function Dashboard() {
           sourceEmail: isGlobalSearch ? transferModalFile.accountEmail : selectedAcc.email,
           targetEmail: targetEmail,
           fileName: transferModalFile.name,
-          mimeType: transferModalFile.isFolder ? 'application/vnd.google-apps.folder' : undefined
+          mimeType: transferModalFile.mimeType // Pastikan mimetype dikirim
         })
       });
+      
+      const data = await res.json();
+      
       if (res.ok) {
         alert("Transfer berhasil! File ada di root folder akun tujuan.");
         setTransferModalFile(null);
       } else {
-        alert("Transfer gagal.");
+        // Tampilkan pesan error spesifik dari server Koyeb
+        alert(`Transfer gagal: ${data.error || "Kesalahan tidak diketahui"}`);
       }
     } catch (e) {
-      alert("Terjadi kesalahan saat transfer.");
+      alert("Terjadi kesalahan jaringan saat transfer.");
     } finally {
       setIsTransferring(false);
     }
@@ -209,11 +211,9 @@ export default function Dashboard() {
     finally { setIsUploading(false); event.target.value = null; }
   };
 
-  // Menentukan sumber data (Hasil pencarian global ATAU folder saat ini)
   const currentData = isGlobalSearch ? globalResults : files;
 
   const processedFiles = useMemo(() => {
-    // Jika tidak global search, jalankan filter lokal
     let filtered = isGlobalSearch ? currentData : currentData.filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
     
     return filtered.sort((a, b) => {
@@ -227,7 +227,6 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans relative">
       
-      {/* MODAL IN-APP PREVIEW */}
       {previewUrl && (
         <div className="fixed inset-0 bg-black/80 z-[60] flex flex-col p-4 md:p-10">
           <div className="flex justify-between items-center text-white mb-4">
@@ -240,7 +239,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* MODAL TRANSFER ANTAR AKUN */}
       {transferModalFile && (
         <div className="fixed inset-0 bg-slate-900/60 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
@@ -420,7 +418,6 @@ export default function Dashboard() {
                             <button onClick={(e) => handleDownloadOrPreview(file, 'download', e)} className="w-full text-left px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 flex items-center"><Download className="w-4 h-4 mr-2" /> Download</button>
                           </>
                         )}
-                        {/* TOMBOL TRANSFER BARU */}
                         {accounts.length > 1 && !file.isFolder && (
                           <button onClick={(e) => { e.stopPropagation(); setTransferModalFile(file); setActiveMenuId(null); }} className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 flex items-center border-t border-b border-slate-50">
                             <Send className="w-4 h-4 mr-2" /> Transfer
@@ -438,7 +435,6 @@ export default function Dashboard() {
                     ${file.isFolder ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'}`}>
                     {file.isFolder ? <Folder className="fill-current w-3/5 h-3/5" /> : <FileText className="w-3/5 h-3/5" />}
                     
-                    {/* INDIKATOR SUMBER AKUN DI GLOBAL SEARCH */}
                     {isGlobalSearch && (
                       <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white text-[8px] px-1.5 py-0.5 rounded-md font-bold truncate max-w-[40px]" title={file.accountEmail}>
                         {file.accountEmail.split('@')[0].substring(0,4)}
