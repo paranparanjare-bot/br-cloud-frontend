@@ -11,7 +11,6 @@ export default function Dashboard() {
   const [currentFolder, setCurrentFolder] = useState('root');
   const [history, setHistory] = useState([]);
   const [search, setSearch] = useState("");
-  const [viewSize, setViewSize] = useState("medium");
 
   const loadAccounts = async () => {
     try {
@@ -61,10 +60,6 @@ export default function Dashboard() {
     setCurrentFolder(last);
   };
 
-  const gridStyles = { 
-    medium: "grid-cols-2 md:grid-cols-5 gap-6" 
-  };
-
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
       <aside className="w-64 bg-white border-r p-6 flex flex-col shadow-sm">
@@ -103,7 +98,7 @@ export default function Dashboard() {
           {isLoading ? (
             <div className="text-center py-40 animate-pulse text-blue-500 font-black italic tracking-widest">LOADING DRIVE...</div>
           ) : (
-            <div className={`grid ${gridStyles[viewSize]}`}>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
               {files.filter(f => f.name.toLowerCase().includes(search.toLowerCase())).map(file => (
                 <div key={file.id} onClick={() => handleItemClick(file)}
                   className="bg-white border border-slate-100 rounded-3xl cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all p-5 flex flex-col items-center">
