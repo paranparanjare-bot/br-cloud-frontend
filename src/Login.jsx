@@ -1,29 +1,40 @@
-import React from 'react';
-import { Cloud, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Cloud, ShieldCheck, AlertCircle } from 'lucide-react';
 
 const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app";
 
 export default function Login() {
-  
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
   // Fungsi memanggil rute Google di Backend
   const handleLoginGoogle = async () => {
+    setIsLoading(true);
+    setErrorMessage(''); // Reset error sebelumnya
+    
     try {
       const response = await fetch(`${API_BASE_URL}/api/auth/google`);
-      const data = await response.json();
-      if (data.url) window.location.href = data.url; // Lempar user ke halaman izin Google
-    } catch (error) {
-      alert("Gagal menghubungi server Koyeb. Pastikan server backend menyala!");
-    }
-  };
+      
+      // Jika server Koyeb merespon tapi dengan kode error (misal 500 Internal Server Error)
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Server Error ${response.status}: ${errText}`);
+      }
 
-  // Fungsi memanggil rute Dropbox di Backend
-  const handleLoginDropbox = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/dropbox`);
       const data = await response.json();
-      if (data.url) window.location.href = data.url; // Lempar user ke halaman izin Dropbox
+      
+      if (data.url) {
+        window.location.href = data.url; // Lempar user ke halaman izin Google
+      } else {
+        throw new Error("Respon dari server tidak memiliki URL login.");
+      }
+      
     } catch (error) {
-      alert("Gagal menghubungi server Koyeb.");
+      console.error("Fetch Error:", error);
+      // Menampilkan pesan error spesifik agar mudah di-debug
+      setErrorMessage(`Koneksi Gagal: ${error.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -42,22 +53,32 @@ export default function Login() {
           <p className="text-slate-500 mt-2 text-sm">Satu tempat untuk semua penyimpanan Anda.</p>
         </div>
         
+        {/* Area Pesan Error (Muncul jika ada error) */}
+        {errorMessage && (
+          <div className="bg-red-50 text-red-600 text-sm p-4 rounded-xl flex items-start gap-3 border border-red-100">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <p className="break-words">{errorMessage}</p>
+          </div>
+        )}
+
         {/* Tombol Login */}
         <div className="space-y-4 pt-4">
           <button 
             onClick={handleLoginGoogle}
-            className="w-full flex items-center justify-center px-4 py-3 border border-slate-300 rounded-xl shadow-sm bg-white text-slate-700 hover:bg-slate-50 transition-all font-medium hover:border-blue-400"
+            disabled={isLoading}
+            className="w-full flex items-center justify-center px-4 py-3 border border-slate-300 rounded-xl shadow-sm bg-white text-slate-700 hover:bg-slate-50 transition-all font-medium hover:border-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5 mr-3" />
-            Sambungkan Google Drive
-          </button>
-          
-          <button 
-            onClick={handleLoginDropbox}
-            className="w-full flex items-center justify-center px-4 py-3 border border-slate-300 rounded-xl shadow-sm bg-white text-slate-700 hover:bg-slate-50 transition-all font-medium hover:border-indigo-400"
-          >
-            <img src="https://www.svgrepo.com/show/475643/dropbox-color.svg" alt="Dropbox" className="w-5 h-5 mr-3" />
-            Sambungkan Dropbox
+            {isLoading ? (
+              <span className="flex items-center">
+                <Cloud className="w-5 h-5 mr-3 animate-pulse text-blue-500" />
+                Menghubungkan...
+              </span>
+            ) : (
+              <>
+                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5 mr-3" />
+                Sambungkan Google Drive
+              </>
+            )}
           </button>
         </div>
 
