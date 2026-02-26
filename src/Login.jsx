@@ -1,27 +1,29 @@
 import React from 'react';
 import { Cloud, ShieldCheck } from 'lucide-react';
 
+const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app";
+
 export default function Login() {
   
   // Fungsi memanggil rute Google di Backend
   const handleLoginGoogle = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/google');
+      const response = await fetch(`${API_BASE_URL}/api/auth/google`);
       const data = await response.json();
       if (data.url) window.location.href = data.url; // Lempar user ke halaman izin Google
     } catch (error) {
-      alert("Gagal menghubungi server Satpam (Port 5000). Pastikan server menyala!");
+      alert("Gagal menghubungi server Koyeb. Pastikan server backend menyala!");
     }
   };
 
   // Fungsi memanggil rute Dropbox di Backend
   const handleLoginDropbox = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/auth/dropbox');
+      const response = await fetch(`${API_BASE_URL}/api/auth/dropbox`);
       const data = await response.json();
       if (data.url) window.location.href = data.url; // Lempar user ke halaman izin Dropbox
     } catch (error) {
-      alert("Gagal menghubungi server Satpam (Port 5000).");
+      alert("Gagal menghubungi server Koyeb.");
     }
   };
 
