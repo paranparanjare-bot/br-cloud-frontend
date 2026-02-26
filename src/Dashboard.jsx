@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, LayoutGrid, List, Minimize2, User, ArrowUp, ArrowDown } from 'lucide-react';
 
-// PAKSA LANGSUNG KE KOYEB - JANGAN PAKAI LOCALHOST LAGI
+// URL LANGSUNG KE KOYEB - INI HARUS HTTPS
 const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app"; 
 
 export default function Dashboard() {
@@ -66,7 +66,7 @@ export default function Dashboard() {
   const gridStyles = { small: "grid-cols-4 md:grid-cols-8 gap-2", medium: "grid-cols-2 md:grid-cols-5 gap-6", list: "grid-cols-1 gap-2" };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800">
+    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
       <aside className="w-64 bg-white border-r p-6 flex flex-col shadow-sm">
         <div className="flex items-center mb-10 text-blue-600 font-bold text-xl italic"><Cloud className="mr-2"/> BR Drive</div>
         <div className="space-y-2 flex-1 overflow-y-auto">
@@ -81,7 +81,7 @@ export default function Dashboard() {
                 fetch(`${API_BASE_URL}/api/auth/google`)
                 .then(r => r.json())
                 .then(d => { if(d.url) window.location.href=d.url; })
-                .catch(err => alert("Server Koyeb belum merespon. Tunggu sebentar."));
+                .catch(() => alert("Koneksi ke server Koyeb gagal. Pastikan server Healthy."));
             }}
             className="w-full p-3 rounded-xl text-xs font-bold border-2 border-dashed border-slate-200 text-slate-400 hover:text-blue-500 transition-all">
             + Tambah Akun
@@ -103,7 +103,7 @@ export default function Dashboard() {
 
         <div className="p-10 overflow-y-auto">
           {isLoading ? (
-            <div className="text-center py-40 animate-pulse text-blue-500 font-black">SINKRONISASI DRIVE...</div>
+            <div className="text-center py-40 animate-pulse text-blue-500 font-black italic tracking-widest">SINKRONISASI DRIVE...</div>
           ) : (
             <div className={`grid ${gridStyles[viewSize]}`}>
               {sortedFiles.filter(f => f.name.toLowerCase().includes(search.toLowerCase())).map(file => (
@@ -112,7 +112,7 @@ export default function Dashboard() {
                   <div className={`rounded-2xl p-4 w-14 h-14 mb-4 flex items-center justify-center ${file.isFolder ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-600'}`}>
                     {file.isFolder ? <Folder className="fill-current w-full h-full" /> : <FileText className="w-full h-full" />}
                   </div>
-                  <p className="font-bold truncate text-sm w-full text-center">{file.name}</p>
+                  <p className="font-bold truncate text-sm w-full text-center text-slate-700">{file.name}</p>
                 </div>
               ))}
             </div>
