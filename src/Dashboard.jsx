@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, LayoutGrid, List, Minimize2, User, ArrowUp, ArrowDown } from 'lucide-react';
 
-// URL LANGSUNG KE KOYEB (Hardcoded untuk memastikan koneksi tembus)
+// PAKSA LANGSUNG KE KOYEB - JANGAN PAKAI LOCALHOST LAGI
 const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app"; 
 
 export default function Dashboard() {
@@ -18,13 +18,12 @@ export default function Dashboard() {
 
   const loadAccounts = async () => {
     try {
-      console.log("Mencoba menghubungi Satpam di:", API_BASE_URL);
       const res = await fetch(`${API_BASE_URL}/api/accounts`);
       const data = await res.json();
       setAccounts(data);
       if (data.length > 0 && !selectedAcc) setSelectedAcc(data[0]);
     } catch (e) { 
-      console.error("Gagal koneksi ke Backend:", e);
+      console.error("Gagal koneksi ke server Koyeb:", e);
     }
   };
 
@@ -36,7 +35,7 @@ export default function Dashboard() {
       const data = await res.json();
       setFiles(Array.isArray(data) ? data : []);
     } catch (e) { 
-      console.error("Gagal load file:", e); 
+      console.error("Gagal muat file:", e); 
     } finally { 
       setIsLoading(false); 
     }
@@ -77,15 +76,23 @@ export default function Dashboard() {
               <User className="w-4 h-4 mr-3" /> {acc.name.split(' ')[0]}
             </button>
           ))}
-          <button onClick={() => fetch(`${API_BASE_URL}/api/auth/google`).then(r => r.json()).then(d => window.location.href=d.url)}
-            className="w-full p-3 rounded-xl text-xs font-bold border-2 border-dashed border-slate-200 text-slate-400 hover:text-blue-500 transition-all">+ Tambah Akun</button>
+          <button 
+            onClick={() => {
+                fetch(`${API_BASE_URL}/api/auth/google`)
+                .then(r => r.json())
+                .then(d => { if(d.url) window.location.href=d.url; })
+                .catch(err => alert("Server Koyeb belum merespon. Tunggu sebentar."));
+            }}
+            className="w-full p-3 rounded-xl text-xs font-bold border-2 border-dashed border-slate-200 text-slate-400 hover:text-blue-500 transition-all">
+            + Tambah Akun
+          </button>
         </div>
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-20 bg-white border-b flex items-center px-10 gap-4">
           {currentFolder !== 'root' && (
-            <button onClick={() => {const h=[...history]; const l=h.pop()||'root'; setHistory(h); setCurrentFolder(l);}} className="p-2 border rounded-full"><ChevronLeft /></button>
+            <button onClick={() => {const h=[...history]; const l=h.pop()||'root'; setHistory(h); setCurrentFolder(l);}} className="p-2 border rounded-full hover:bg-slate-100"><ChevronLeft /></button>
           )}
           <div className="relative flex-1">
             <Search className="absolute left-4 top-3 text-slate-400 w-4 h-4" />
@@ -96,7 +103,7 @@ export default function Dashboard() {
 
         <div className="p-10 overflow-y-auto">
           {isLoading ? (
-            <div className="text-center py-40 animate-pulse text-blue-500 font-black">MENGHUBUNGKAN KE DRIVE...</div>
+            <div className="text-center py-40 animate-pulse text-blue-500 font-black">SINKRONISASI DRIVE...</div>
           ) : (
             <div className={`grid ${gridStyles[viewSize]}`}>
               {sortedFiles.filter(f => f.name.toLowerCase().includes(search.toLowerCase())).map(file => (
