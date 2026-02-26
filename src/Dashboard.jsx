@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, User, UploadCloud, List, Grid, LayoutGrid, ArrowUp, ArrowDown, Menu, X } from 'lucide-react';
+import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, User, UploadCloud, List, Grid, LayoutGrid, ArrowUp, ArrowDown, Menu, X, FolderPlus, MoreVertical, Trash2, Download, Eye } from 'lucide-react';
 
 const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app"; 
 
 export default function Dashboard() {
   const [accounts, setAccounts] = useState([]);
+  const [quotas, setQuotas] = useState({}); // State untuk menyimpan data kuota
   const [selectedAcc, setSelectedAcc] = useState(null);
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +18,10 @@ export default function Dashboard() {
   const [sortBy, setSortBy] = useState('name'); 
   const [sortOrder, setSortOrder] = useState('asc'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+  
+  // State untuk Menu Konteks & Preview
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   const fileInputRef = useRef(null);
 
@@ -27,66 +32,106 @@ export default function Dashboard() {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
   };
 
-  const loadAccounts = async () => {
+  const loadAccountsAndQuota = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/accounts`);
       const data = await res.json();
       setAccounts(data);
       
-      // LOGIKA BARU: Cek LocalStorage untuk sesi permanen
       if (data.length > 0) {
         const savedAccEmail = localStorage.getItem('lastActiveAccount');
         const foundAcc = data.find(acc => acc.email === savedAccEmail);
-        
-        if (foundAcc) {
-          setSelectedAcc(foundAcc);
-        } else if (!selectedAcc) {
-          // Jika tidak ada di LocalStorage, pilih akun pertama
-          setSelectedAcc(data[0]);
-          localStorage.setItem('lastActiveAccount', data[0].email);
-        }
+        setSelectedAcc(foundAcc || data[0]);
+        if (!foundAcc) localStorage.setItem('lastActiveAccount', data[0].email);
+
+        // Fetch Kuota untuk semua akun
+        data.forEach(async (acc) => {
+          try {
+            const qRes = await fetch(`${API_BASE_URL}/api/accounts/quota?email=${acc.email}`);
+            const qData = await qRes.json();
+            if (qData.limit) {
+              setQuotas(prev => ({ ...prev, [acc.email]: qData }));
+            }
+          } catch(e) {}
+        });
       }
-    } catch (e) { 
-      console.error("Gagal koneksi ke Koyeb:", e);
-    }
+    } catch (e) { console.error("Gagal load akun:", e); }
   };
 
   const loadFiles = async (email, folderId = 'root') => {
     if (!email) return;
     setIsLoading(true);
+    setActiveMenuId(null); // Tutup menu saat pindah folder
     try {
       const res = await fetch(`${API_BASE_URL}/api/files/list?email=${email}&folderId=${folderId}`);
       const data = await res.json();
       setFiles(Array.isArray(data) ? data : []);
-    } catch (e) { 
-      console.error("Gagal load file:", e); 
-    } finally { 
-      setIsLoading(false); 
-    }
+    } catch (e) { console.error("Gagal load file:", e); } 
+    finally { setIsLoading(false); }
   };
 
-  useEffect(() => { loadAccounts(); }, []);
+  useEffect(() => { loadAccountsAndQuota(); }, []);
   
   useEffect(() => { 
     if (selectedAcc) {
       loadFiles(selectedAcc.email, currentFolder); 
-      // Simpan akun yang sedang aktif ke LocalStorage agar permanen
       localStorage.setItem('lastActiveAccount', selectedAcc.email);
     }
   }, [selectedAcc, currentFolder]);
 
-  const handleItemClick = async (file) => {
+  // --- FUNGSI OPERASIONAL BARU ---
+
+  const handleCreateFolder = async () => {
+    const folderName = prompt("Masukkan nama folder baru:");
+    if (!folderName || !selectedAcc) return;
+    try {
+      await fetch(`${API_BASE_URL}/api/files/folder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: selectedAcc.email, folderId: currentFolder, name: folderName })
+      });
+      loadFiles(selectedAcc.email, currentFolder);
+    } catch (e) { alert("Gagal membuat folder"); }
+  };
+
+  const handleDelete = async (fileId, fileName, e) => {
+    e.stopPropagation(); // Mencegah klik masuk ke dalam folder
+    if (!window.confirm(`Yakin ingin memindahkan "${fileName}" ke tempat sampah?`)) return;
+    try {
+      await fetch(`${API_BASE_URL}/api/files/delete/${fileId}?email=${selectedAcc.email}`, { method: 'DELETE' });
+      loadFiles(selectedAcc.email, currentFolder);
+    } catch (err) { alert("Gagal menghapus"); }
+  };
+
+  const handleDownloadOrPreview = async (file, actionType, e) => {
+    if(e) e.stopPropagation();
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/files/open/${file.id}?email=${selectedAcc.email}`);
+      const data = await res.json();
+      
+      if (actionType === 'download') {
+        // Gunakan link download langsung jika ada, jika tidak fallback ke tab baru
+        if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+        else window.open(data.url, '_blank');
+      } else if (actionType === 'preview') {
+        // Trik Google Drive: ubah /view menjadi /preview agar bisa di-embed di iframe
+        const embedUrl = data.url.replace('/view', '/preview');
+        setPreviewUrl(embedUrl);
+      }
+    } catch (err) { alert("Gagal mengambil link file"); }
+    setActiveMenuId(null);
+  };
+
+  const handleItemClick = (file) => {
     if (file.isFolder) {
       setHistory([...history, currentFolder]);
       setCurrentFolder(file.id);
     } else {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/files/open/${file.id}?email=${selectedAcc.email}`);
-        const data = await res.json();
-        if (data.url) window.open(data.url, '_blank');
-      } catch (e) { alert("Gagal membuka file"); }
+      handleDownloadOrPreview(file, 'preview', null); // Default klik file = Preview
     }
   };
+
+  // --- END FUNGSI OPERASIONAL ---
 
   const goBack = () => {
     const prev = [...history];
@@ -98,7 +143,6 @@ export default function Dashboard() {
   const handleUpload = async (event) => {
     const file = event.target.files[0];
     if (!file || !selectedAcc) return;
-
     const formData = new FormData();
     formData.append('file', file);
     formData.append('email', selectedAcc.email);
@@ -106,38 +150,19 @@ export default function Dashboard() {
 
     setIsUploading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/files/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-      if (res.ok) {
-        loadFiles(selectedAcc.email, currentFolder); 
-      } else {
-        alert("Gagal mengunggah file.");
-      }
-    } catch (e) {
-      console.error("Upload error:", e);
-      alert("Terjadi kesalahan saat mengunggah.");
-    } finally {
-      setIsUploading(false);
-      event.target.value = null; 
-    }
+      const res = await fetch(`${API_BASE_URL}/api/files/upload`, { method: 'POST', body: formData });
+      if (res.ok) loadFiles(selectedAcc.email, currentFolder); 
+      else alert("Gagal mengunggah file.");
+    } catch (e) { alert("Terjadi kesalahan saat mengunggah."); } 
+    finally { setIsUploading(false); event.target.value = null; }
   };
 
   const processedFiles = useMemo(() => {
     let filtered = files.filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
-    
     return filtered.sort((a, b) => {
       if (a.isFolder && !b.isFolder) return -1;
       if (!a.isFolder && b.isFolder) return 1;
-
-      let comparison = 0;
-      if (sortBy === 'name') {
-        comparison = a.name.localeCompare(b.name);
-      } else if (sortBy === 'size') {
-        comparison = a.size - b.size;
-      }
-
+      let comparison = sortBy === 'name' ? a.name.localeCompare(b.name) : a.size - b.size;
       return sortOrder === 'asc' ? comparison : -comparison;
     });
   }, [files, search, sortBy, sortOrder]);
@@ -145,15 +170,25 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans relative">
       
+      {/* MODAL IN-APP PREVIEW */}
+      {previewUrl && (
+        <div className="fixed inset-0 bg-black/80 z-[60] flex flex-col p-4 md:p-10">
+          <div className="flex justify-between items-center text-white mb-4">
+            <h3 className="font-semibold text-lg">Pratinjau File</h3>
+            <button onClick={() => setPreviewUrl(null)} className="p-2 hover:bg-white/20 rounded-full"><X className="w-6 h-6"/></button>
+          </div>
+          <div className="flex-1 bg-white rounded-xl overflow-hidden">
+            <iframe src={previewUrl} className="w-full h-full border-none" allow="autoplay" title="Preview" />
+          </div>
+        </div>
+      )}
+
       {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/50 z-40 md:hidden transition-opacity"
-          onClick={() => setIsSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 bg-slate-900/50 z-40 md:hidden transition-opacity" onClick={() => setIsSidebarOpen(false)} />
       )}
 
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r flex flex-col shadow-xl md:shadow-sm transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center justify-between p-6 mb-4">
+        <div className="flex items-center justify-between p-6 mb-2">
           <div className="flex items-center text-blue-600 font-bold text-xl italic">
             <Cloud className="mr-2"/> BR Drive
           </div>
@@ -162,49 +197,61 @@ export default function Dashboard() {
           </button>
         </div>
 
-        <div className="space-y-2 flex-1 overflow-y-auto px-6 pb-6">
-          {accounts.map(acc => (
-            <button key={acc.email} 
-              onClick={() => {
-                setSelectedAcc(acc); 
-                setCurrentFolder('root'); 
-                setHistory([]);
-                setIsSidebarOpen(false); 
-              }}
-              className={`w-full flex items-center p-3 rounded-xl text-sm font-bold transition-all ${selectedAcc?.email === acc.email ? 'bg-blue-600 text-white shadow-lg' : 'hover:bg-slate-100 text-slate-500'}`}>
-              <User className="w-4 h-4 mr-3" /> {acc.name.split(' ')[0]}
-            </button>
-          ))}
+        <div className="space-y-3 flex-1 overflow-y-auto px-6 pb-6">
+          {accounts.map(acc => {
+            const quota = quotas[acc.email];
+            const usagePercent = quota ? (Number(quota.usage) / Number(quota.limit)) * 100 : 0;
+            const isFull = usagePercent > 90;
+
+            return (
+              <div key={acc.email} className="relative group">
+                <button 
+                  onClick={() => { setSelectedAcc(acc); setCurrentFolder('root'); setHistory([]); setIsSidebarOpen(false); }}
+                  className={`w-full flex flex-col p-3 rounded-xl transition-all border ${selectedAcc?.email === acc.email ? 'bg-blue-50 border-blue-200' : 'bg-white border-transparent hover:border-slate-200'}`}>
+                  
+                  <div className="flex items-center w-full">
+                    <User className={`w-4 h-4 mr-3 ${selectedAcc?.email === acc.email ? 'text-blue-600' : 'text-slate-400'}`} /> 
+                    <span className={`text-sm font-bold truncate ${selectedAcc?.email === acc.email ? 'text-blue-700' : 'text-slate-600'}`}>
+                      {acc.name.split(' ')[0]}
+                    </span>
+                  </div>
+
+                  {/* STORAGE INDICATOR */}
+                  {quota && (
+                    <div className="w-full mt-3">
+                      <div className="flex justify-between text-[10px] text-slate-500 mb-1 font-medium">
+                        <span>{formatBytes(quota.usage, 1)}</span>
+                        <span>{formatBytes(quota.limit, 1)}</span>
+                      </div>
+                      <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                        <div className={`h-1.5 rounded-full ${isFull ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${usagePercent}%` }}></div>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              </div>
+            );
+          })}
+          
           <button 
-            onClick={() => {
-                fetch(`${API_BASE_URL}/api/auth/google`)
-                .then(r => r.json())
-                .then(d => { if(d.url) window.location.href=d.url; })
-                .catch(() => alert("Koneksi ke server Koyeb gagal."));
-            }}
+            onClick={() => { fetch(`${API_BASE_URL}/api/auth/google`).then(r => r.json()).then(d => { if(d.url) window.location.href=d.url; }); }}
             className="w-full p-3 rounded-xl text-xs font-bold border-2 border-dashed border-slate-200 text-slate-400 hover:text-blue-500 transition-all mt-4">
             + Tambah Akun
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col overflow-hidden w-full">
-        <header className="bg-white border-b flex flex-col md:flex-row items-start md:items-center px-4 py-3 md:h-20 gap-3">
-          
+      <main className="flex-1 flex flex-col overflow-hidden w-full" onClick={() => setActiveMenuId(null)}>
+        <header className="bg-white border-b flex flex-col md:flex-row items-start md:items-center px-4 py-3 md:h-20 gap-3 relative z-30">
           <div className="flex items-center w-full md:w-auto gap-2">
-            <button 
-              className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg" 
-              onClick={() => setIsSidebarOpen(true)}
-            >
+            <button className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-lg" onClick={() => setIsSidebarOpen(true)}>
               <Menu className="w-6 h-6" />
             </button>
-
             {currentFolder !== 'root' && (
               <button onClick={goBack} className="p-2 border rounded-full hover:bg-slate-100 shrink-0">
                 <ChevronLeft className="w-5 h-5" />
               </button>
             )}
-            
             <div className="relative flex-1 md:w-64 lg:w-96">
               <Search className="absolute left-3 top-3.5 text-slate-400 w-4 h-4" />
               <input className="w-full bg-slate-100 pl-10 pr-4 py-2.5 rounded-xl outline-none text-sm" placeholder="Cari file..." onChange={e => setSearch(e.target.value)} />
@@ -214,7 +261,6 @@ export default function Dashboard() {
           <div className="hidden md:block flex-1"></div>
 
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0 hide-scrollbar">
-            
             <div className="flex items-center bg-slate-100 rounded-xl p-1 shrink-0">
               <select className="bg-transparent text-xs font-medium text-slate-600 outline-none px-2 py-1.5 cursor-pointer" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                 <option value="name">Nama</option>
@@ -235,7 +281,12 @@ export default function Dashboard() {
               <RefreshCw className="w-4 h-4 md:w-5 md:h-5"/>
             </button>
             
-            {/* Tombol Upload (Hanya Ikon) */}
+            {/* TOMBOL BUAT FOLDER */}
+            <button onClick={handleCreateFolder} className="p-2 border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-50 shrink-0" title="Buat Folder Baru">
+              <FolderPlus className="w-4 h-4 md:w-5 md:h-5"/>
+            </button>
+
+            {/* TOMBOL UPLOAD */}
             <button onClick={() => fileInputRef.current.click()} disabled={isUploading || !selectedAcc} className="flex items-center justify-center bg-blue-600 text-white w-10 h-10 md:w-11 md:h-11 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 shrink-0 shadow-sm">
               {isUploading ? <RefreshCw className="w-5 h-5 animate-spin" /> : <UploadCloud className="w-5 h-5" />}
             </button>
@@ -255,17 +306,46 @@ export default function Dashboard() {
               'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6'
             }>
               {processedFiles.map(file => (
-                <div key={file.id} onClick={() => handleItemClick(file)}
-                  className={`bg-white border border-slate-200 cursor-pointer hover:border-blue-300 hover:shadow-md transition-all flex 
+                <div key={file.id} 
+                  onClick={() => handleItemClick(file)}
+                  className={`bg-white border border-slate-200 cursor-pointer hover:border-blue-300 hover:shadow-md transition-all flex relative group
                   ${viewMode === 'list' ? 'flex-row items-center p-3 rounded-2xl gap-4' : 'flex-col items-center p-4 md:p-5 rounded-2xl md:rounded-3xl hover:-translate-y-1'}`}>
                   
+                  {/* TOMBOL MENU TITIK TIGA (CONTEXT MENU) */}
+                  <div className={`absolute ${viewMode === 'list' ? 'right-4 top-1/2 -translate-y-1/2' : 'right-2 top-2'} z-10`}>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === file.id ? null : file.id); }}
+                      className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg">
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    
+                    {/* DROPDOWN MENU */}
+                    {activeMenuId === file.id && (
+                      <div className="absolute right-0 mt-1 w-36 bg-white rounded-xl shadow-xl border border-slate-100 py-1 z-20 overflow-hidden">
+                        {!file.isFolder && (
+                          <>
+                            <button onClick={(e) => handleDownloadOrPreview(file, 'preview', e)} className="w-full text-left px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 flex items-center">
+                              <Eye className="w-4 h-4 mr-2" /> Lihat
+                            </button>
+                            <button onClick={(e) => handleDownloadOrPreview(file, 'download', e)} className="w-full text-left px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 flex items-center">
+                              <Download className="w-4 h-4 mr-2" /> Download
+                            </button>
+                          </>
+                        )}
+                        <button onClick={(e) => handleDelete(file.id, file.name, e)} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center">
+                          <Trash2 className="w-4 h-4 mr-2" /> Hapus
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className={`flex items-center justify-center shrink-0 
-                    ${viewMode === 'list' ? 'w-10 h-10 rounded-xl' : viewMode === 'small' ? 'w-10 h-10 rounded-xl mb-2' : 'w-12 h-12 md:w-14 md:h-14 rounded-2xl mb-3 md:mb-4'}
+                    ${viewMode === 'list' ? 'w-10 h-10 rounded-xl' : viewMode === 'small' ? 'w-10 h-10 rounded-xl mb-2 mt-2' : 'w-12 h-12 md:w-14 md:h-14 rounded-2xl mb-3 md:mb-4 mt-2'}
                     ${file.isFolder ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'}`}>
                     {file.isFolder ? <Folder className="fill-current w-3/5 h-3/5" /> : <FileText className="w-3/5 h-3/5" />}
                   </div>
                   
-                  <div className={`flex flex-col flex-1 overflow-hidden ${viewMode !== 'list' && 'items-center w-full'}`}>
+                  <div className={`flex flex-col flex-1 overflow-hidden ${viewMode !== 'list' && 'items-center w-full px-2'}`}>
                     <p className={`font-semibold truncate text-slate-700 ${viewMode === 'list' ? 'text-sm' : 'text-xs md:text-sm w-full text-center'}`} title={file.name}>
                       {file.name}
                     </p>
@@ -280,16 +360,7 @@ export default function Dashboard() {
           )}
         </div>
       </main>
-
-      <style>{`
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
+      <style>{` .hide-scrollbar::-webkit-scrollbar { display: none; } .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; } `}</style>
     </div>
   );
 }
