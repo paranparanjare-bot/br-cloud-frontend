@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, User } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Search, Folder, FileText, Cloud, ChevronLeft, RefreshCw, User, Upload, List, Grid, LayoutGrid, ArrowUp, ArrowDown } from 'lucide-react';
 
 const API_BASE_URL = "https://educational-cyndie-gdrivegnet-de995a1e.koyeb.app"; 
 
@@ -8,9 +8,24 @@ export default function Dashboard() {
   const [selectedAcc, setSelectedAcc] = useState(null);
   const [files, setFiles] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [currentFolder, setCurrentFolder] = useState('root');
   const [history, setHistory] = useState([]);
   const [search, setSearch] = useState("");
+  
+  // State Baru untuk Tampilan & Sortir
+  const [viewMode, setViewMode] = useState('medium'); // 'small', 'medium', 'list'
+  const [sortBy, setSortBy] = useState('name'); // 'name', 'size'
+  const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
+
+  const fileInputRef = useRef(null);
+
+  const formatBytes = (bytes, decimals = 2) => {
+    if (!+bytes) return '0 Bytes';
+    const k = 1024, dm = decimals < 0 ? 0 : decimals, sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+  };
 
   const loadAccounts = async () => {
     try {
@@ -60,6 +75,56 @@ export default function Dashboard() {
     setCurrentFolder(last);
   };
 
+  // Fungsi Upload File
+  const handleUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file || !selectedAcc) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('email', selectedAcc.email);
+    formData.append('folderId', currentFolder);
+
+    setIsUploading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/files/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        loadFiles(selectedAcc.email, currentFolder); // Refresh folder setelah sukses upload
+      } else {
+        alert("Gagal mengunggah file.");
+      }
+    } catch (e) {
+      console.error("Upload error:", e);
+      alert("Terjadi kesalahan saat mengunggah.");
+    } finally {
+      setIsUploading(false);
+      event.target.value = null; // Reset input file
+    }
+  };
+
+  // Logika Sortir & Pencarian (Dijalankan secara lokal agar cepat)
+  const processedFiles = useMemo(() => {
+    let filtered = files.filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
+    
+    return filtered.sort((a, b) => {
+      // Aturan utama: Folder selalu di atas
+      if (a.isFolder && !b.isFolder) return -1;
+      if (!a.isFolder && b.isFolder) return 1;
+
+      let comparison = 0;
+      if (sortBy === 'name') {
+        comparison = a.name.localeCompare(b.name);
+      } else if (sortBy === 'size') {
+        comparison = a.size - b.size;
+      }
+
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [files, search, sortBy, sortOrder]);
+
   return (
     <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
       <aside className="w-64 bg-white border-r p-6 flex flex-col shadow-sm">
@@ -85,27 +150,75 @@ export default function Dashboard() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-20 bg-white border-b flex items-center px-10 gap-4">
+        <header className="h-20 bg-white border-b flex items-center px-6 gap-4">
           {currentFolder !== 'root' && <button onClick={goBack} className="p-2 border rounded-full hover:bg-slate-100"><ChevronLeft /></button>}
-          <div className="relative flex-1">
+          
+          <div className="relative flex-1 max-w-xl">
             <Search className="absolute left-4 top-3 text-slate-400 w-4 h-4" />
-            <input className="w-full bg-slate-100 pl-12 pr-4 py-3 rounded-2xl outline-none" placeholder="Cari file..." onChange={e => setSearch(e.target.value)} />
+            <input className="w-full bg-slate-100 pl-12 pr-4 py-3 rounded-2xl outline-none text-sm" placeholder="Cari file..." onChange={e => setSearch(e.target.value)} />
           </div>
-          <button onClick={() => loadFiles(selectedAcc.email, currentFolder)} className="p-2 text-slate-400 hover:text-blue-500"><RefreshCw className="w-5 h-5"/></button>
+          
+          <div className="flex-1"></div> {/* Spacer */}
+
+          {/* Kontrol Sortir */}
+          <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-1">
+            <select className="bg-transparent text-sm text-slate-600 outline-none p-2 cursor-pointer" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="name">Nama</option>
+              <option value="size">Ukuran</option>
+            </select>
+            <button onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')} className="p-2 text-slate-500 hover:text-blue-600">
+              {sortOrder === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* Kontrol Tampilan */}
+          <div className="flex items-center bg-slate-100 rounded-xl p-1">
+            <button onClick={() => setViewMode('list')} className={`p-2 rounded-lg ${viewMode === 'list' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}><List className="w-4 h-4"/></button>
+            <button onClick={() => setViewMode('medium')} className={`p-2 rounded-lg ${viewMode === 'medium' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}><LayoutGrid className="w-4 h-4"/></button>
+            <button onClick={() => setViewMode('small')} className={`p-2 rounded-lg ${viewMode === 'small' ? 'bg-white shadow text-blue-600' : 'text-slate-400'}`}><Grid className="w-4 h-4"/></button>
+          </div>
+
+          {/* Tombol Refresh & Upload */}
+          <button onClick={() => loadFiles(selectedAcc.email, currentFolder)} className="p-2 border border-slate-200 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-50"><RefreshCw className="w-5 h-5"/></button>
+          
+          <button onClick={() => fileInputRef.current.click()} disabled={isUploading || !selectedAcc} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm hover:bg-blue-700 transition-colors disabled:opacity-50">
+            {isUploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {isUploading ? 'Mengunggah...' : 'Upload'}
+          </button>
+          <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" />
         </header>
 
-        <div className="p-10 overflow-y-auto">
+        <div className="p-8 overflow-y-auto flex-1 bg-slate-50/50">
           {isLoading ? (
             <div className="text-center py-40 animate-pulse text-blue-500 font-black italic tracking-widest">LOADING DRIVE...</div>
+          ) : processedFiles.length === 0 ? (
+            <div className="text-center py-40 text-slate-400 font-medium text-sm">Folder ini kosong atau file tidak ditemukan.</div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
-              {files.filter(f => f.name.toLowerCase().includes(search.toLowerCase())).map(file => (
+            <div className={
+              viewMode === 'list' ? 'flex flex-col gap-2' : 
+              viewMode === 'small' ? 'grid grid-cols-3 md:grid-cols-6 lg:grid-cols-8 gap-4' : 
+              'grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6'
+            }>
+              {processedFiles.map(file => (
                 <div key={file.id} onClick={() => handleItemClick(file)}
-                  className="bg-white border border-slate-100 rounded-3xl cursor-pointer hover:shadow-xl hover:-translate-y-1 transition-all p-5 flex flex-col items-center">
-                  <div className={`rounded-2xl p-4 w-14 h-14 mb-4 flex items-center justify-center ${file.isFolder ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-600'}`}>
-                    {file.isFolder ? <Folder className="fill-current w-full h-full" /> : <FileText className="w-full h-full" />}
+                  className={`bg-white border border-slate-200 cursor-pointer hover:border-blue-300 hover:shadow-md transition-all flex 
+                  ${viewMode === 'list' ? 'flex-row items-center p-3 rounded-2xl gap-4' : 'flex-col items-center p-5 rounded-3xl hover:-translate-y-1'}`}>
+                  
+                  <div className={`flex items-center justify-center shrink-0 
+                    ${viewMode === 'list' ? 'w-10 h-10 rounded-xl' : viewMode === 'small' ? 'w-10 h-10 rounded-xl mb-2' : 'w-14 h-14 rounded-2xl mb-4'}
+                    ${file.isFolder ? 'bg-amber-50 text-amber-500' : 'bg-blue-50 text-blue-500'}`}>
+                    {file.isFolder ? <Folder className="fill-current w-3/5 h-3/5" /> : <FileText className="w-3/5 h-3/5" />}
                   </div>
-                  <p className="font-bold truncate text-sm w-full text-center text-slate-700">{file.name}</p>
+                  
+                  <div className={`flex flex-col flex-1 overflow-hidden ${viewMode !== 'list' && 'items-center w-full'}`}>
+                    <p className={`font-semibold truncate text-slate-700 ${viewMode === 'list' ? 'text-sm' : 'text-xs w-full text-center'}`}>
+                      {file.name}
+                    </p>
+                    {viewMode === 'list' && !file.isFolder && (
+                      <p className="text-xs text-slate-400 mt-0.5">{formatBytes(file.size)}</p>
+                    )}
+                  </div>
+                  
                 </div>
               ))}
             </div>
